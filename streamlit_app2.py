@@ -5,8 +5,14 @@ import os
 from snowflake.core import Root
 from typing import List
 from snowflake.cortex import complete
-
-
+from trulens.apps.custom import instrument
+from trulens.providers.cortex.provider import Cortex
+from trulens.core import Feedback
+from trulens.core import Select
+import numpy as np
+from trulens.apps.custom import TruCustomApp
+from trulens.core import TruSession
+from trulens.connectors.snowflake import SnowflakeConnector
 
 load_dotenv()
 
@@ -55,14 +61,14 @@ class RAG:
     def __init__(self):
         self.retriever = CortexSearchRetriever(snowpark_session=snowpark_session, limit_to_retrieve=4)
 
-    #@instrument
+    @instrument
     def retrieve_context(self, query: str) -> List[str]:
         """
         Retrieve relevant text from Snowflake Cortex.
         """
         return self.retriever.retrieve(query)
 
-    #@instrument
+    @instrument
     def generate_completion(self, query: str, context_str: List[str]) -> str:
         context = "\n".join(context_str)
         prompt = f"""
@@ -76,7 +82,7 @@ class RAG:
         """
         return complete("mistral-large2", prompt) #.get("result")
 
-    #@instrument
+    @instrument
     def query(self, query: str) -> str:
         """
         Perform the retrieval and generation in a single query flow.
@@ -87,8 +93,29 @@ class RAG:
 
 snowpark_session = Session.builder.configs(connection_params).getOrCreate()
 
-#from snowflake.snowpark.context import get_active_session
-#session = get_active_session()
+tru_snowflake_connector = SnowflakeConnector(snowpark_session=snowpark_session)
+tru_session = TruSession(connector=tru_snowflake_connector)
+provider = Cortex(snowpark_session, "llama3.1-8b")
+
+f_groundedness = (
+    Feedback(provider.groundedness_measure_with_cot_reasons, name="Groundedness")
+        .on(Select.RecordCalls.retrieve_context.rets[:].collect())
+        .on_output()
+)
+
+f_context_relevance = (
+    Feedback(provider.context_relevance, name="Context Relevance")
+        .on_input()
+        .on(Select.RecordCalls.retrieve_context.rets[:])
+        .aggregate(np.mean)
+)
+
+f_answer_relevance = (
+    Feedback(provider.relevance, name="Answer Relevance")
+        .on_input()
+        .on_output()
+        .aggregate(np.mean)
+)
 
 rag = RAG()
 # query = "How do I get Postgres to work?"
@@ -155,10 +182,21 @@ question = st.text_input(':blue[Ask A2 a Question!]', 'I have public IP checked 
 
 # one box with instructions notes as of now -- will fix later to incorporate teacher notes too
 
+tru_rag = TruCustomApp(
+    rag,
+    app_name="RAG",
+    app_version="simple",
+    feedbacks=[f_groundedness, f_answer_relevance, f_context_relevance]
+)
+
+
 if st.button(":snowflake: Submit", type="primary"):
     #rag = RAG()
-    instructions_text = rag.query(question)
-    st.markdown(f"<div class='box box-instructions'><div class='section-header'>📚 Instructions:</div>{instructions_text}</div>", unsafe_allow_html=True)
+    #instructions_text = rag.query(question)
+    #st.markdown(f"<div class='box box-instructions'><div class='section-header'>📚 Instructions:</div>{instructions_text}</div>", unsafe_allow_html=True)
 
+    with tru_rag as recording:
+        instructions_text = rag.query(question)
+    st.markdown(f"<div class='box box-instructions'><div class='section-header'>📚 Instructions:</div>{instructions_text}</div>", unsafe_allow_html=True)
 
 
