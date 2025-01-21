@@ -50,11 +50,10 @@ class CortexSearchRetriever:
     def retrieve(self, query: str) -> List[str]:
         root = Root(self._snowpark_session)
         cortex_search_service = (
-            root.databases[os.getenv("SNOWFLAKE_DATABASE")]
-                .schemas[os.getenv("SNOWFLAKE_SCHEMA")]
-                .cortex_search_services[os.getenv("SNOWFLAKE_CORTEX_SEARCH_SERVICE")]
-            # need to create a second .cortex_search_service for the second service (teacher notes, since i only have
-            # for assignments rn)
+            root.databases[st.secrets["database"]]
+                .schemas[st.secrets["schema"]]
+                .cortex_search_services[st.secrets["SNOWFLAKE_CORTEX_SEARCH_SERVICE"]]
+
         )
         resp = cortex_search_service.search(
             query=query,
