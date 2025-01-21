@@ -19,16 +19,27 @@ load_dotenv()
 
 st.set_page_config(page_title="Assignment Assistant", page_icon="❄️", layout="wide")
 
+# connection_params = {
+#     "account":  os.getenv("SNOWFLAKE_ACCOUNT"),
+#     "user": os.getenv("SNOWFLAKE_USER"),
+#     "password": os.getenv("SNOWFLAKE_USER_PASSWORD"),
+#     "role": os.getenv("SNOWFLAKE_ROLE"),
+#     "database": os.getenv("SNOWFLAKE_DATABASE"),
+#     "schema": os.getenv("SNOWFLAKE_SCHEMA"),
+#     "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE")
+# }
+
 connection_params = {
-    "account":  os.getenv("SNOWFLAKE_ACCOUNT"),
-    "user": os.getenv("SNOWFLAKE_USER"),
-    "password": os.getenv("SNOWFLAKE_USER_PASSWORD"),
-    "role": os.getenv("SNOWFLAKE_ROLE"),
-    "database": os.getenv("SNOWFLAKE_DATABASE"),
-    "schema": os.getenv("SNOWFLAKE_SCHEMA"),
-    "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE")
+    "account":  st.secrets["account"],
+    "user": st.secrets["user"],
+    "password": st.secrets["password"],
+    "role": st.secrets["role"],
+    "database": st.secrets["database"],
+    "schema": st.secrets["schema"],
+    "warehouse": st.secrets["warehouse"]
 }
 
+##########################')
 
 
 class CortexSearchRetriever:
@@ -72,10 +83,17 @@ class RAG:
     @instrument
     def generate_completion(self, query: str, context_str: List[str]) -> str:
         context = "\n".join(context_str)
+        # prompt = f"""
+        #   You are an assignment assistant extracting information from the context provided.
+        #   Only answer the question based on the context. If you don’t have the information, just say so.
+        #   Context: {context}
+        #   Question:
+        #   {query}
+        #   Answer:
+        # """
         prompt = f"""
           You are an assignment assistant extracting information from the context provided.
-          Answer the question based on the context. Be concise and do not hallucinate.
-          If you don’t have the information, just say so.
+          Be concise. If the question is generic, you can answer outside the context given.
           Context: {context}
           Question:
           {query}
@@ -91,33 +109,19 @@ class RAG:
         context_str = self.retrieve_context(query)
         return self.generate_completion(query, context_str)
 
-    @instrument
-    def generate_completion_val(self, query: str, context_str: List[str]) -> str:
-        context = "\n".join(context_str)
-        prompt = f"""
-          You are an assignment assistant extracting information from the context provided.
-          Answer the question based on the context. Be as creative as you want and use poetry to answer.
-          If you don’t have the information, write a haiku. 
-          Context: {context}
-          Question:
-          {query}
-          Answer:
-        """
-        return complete("mistral-large2", prompt) #.get("result")
 
-    @instrument
-    def query_val(self, query: str) -> str:
-        """
-        Perform the retrieval and generation in a single query flow.
-        """
-        context_str = self.retrieve_context(query)
-        return self.generate_completion_val(query, context_str)
+#conn = st.connection("snowflake")
+#snowpark_session = conn.session().ge
 
 
+#snowpark_session = conn.session()
 snowpark_session = Session.builder.configs(connection_params).getOrCreate()
+#snowpark_session = Session.builder.configs(connection_params).getOrCreate()
+#snowpark_session = Session.builder.configs(conn).getOrCreate()
 
 tru_snowflake_connector = SnowflakeConnector(snowpark_session=snowpark_session)
 tru_session = TruSession(connector=tru_snowflake_connector)
+
 provider = Cortex(snowpark_session, "llama3.1-8b")
 
 f_groundedness = (
@@ -140,14 +144,8 @@ f_answer_relevance = (
         .aggregate(np.mean)
 )
 
-rag = RAG()
-# query = "How do I get Postgres to work?"
-# answer = rag.query(query)
-# print (answer)
-# print ('###########################')
-# query = "I have public IP checked. Why is my code not working?"
-# answer = rag.query(query)
-# print (answer)
+
+
 
 
 st.markdown("""
@@ -203,22 +201,15 @@ st.title(":blue[Assignment Assistant] :student::handshake::computer:")
 
 question = st.text_input(':blue[Ask A2 a Question!]', 'I have public IP checked but my code is not working. How do I fix this?')
 
-# one box with instructions notes as of now -- will fix later to incorporate teacher notes too
 
+rag = RAG()
 tru_rag = TruCustomApp(
     rag,
-    app_name="RAG",
-    app_version="production",
+    app_name="Assignment Assistant",
+    app_version="test2",
     feedbacks=[f_groundedness, f_answer_relevance, f_context_relevance]
 )
 
-rag_val = RAG()
-tru_rag_val = TruCustomApp(
-    rag_val,
-    app_name="RAG",
-    app_version="validation",
-    feedbacks=[f_groundedness, f_answer_relevance, f_context_relevance]
-)
 
 if st.button(":snowflake: Submit", type="primary"):
     #rag = RAG()
@@ -227,10 +218,11 @@ if st.button(":snowflake: Submit", type="primary"):
 
     with tru_rag as recording:
         instructions_text = rag.query(question)
-    st.markdown(f"<div class='box box-instructions'><div class='section-header'>📚 Instructions:</div>{instructions_text}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='box box-instructions'><div class='section-header'>📚 Answer:</div>{instructions_text}</div>", unsafe_allow_html=True)
 
-    st.write("The response below are generated with a different prompt, which encourages creativity, to test out Trulens.")
-    with tru_rag_val as recording:
-        instructions_text_val = rag_val.query_val(question)
-    st.markdown(f"<div class='box box-instructions-val'><div class='section-header'>📚 Instructions Val:</div>{instructions_text_val}</div>", unsafe_allow_html=True)
+    # st.header("The response below is generated with a different prompt, to test out Trulens.")
+    # with tru_rag_val as recording:
+    #     instructions_text_val = rag_val.query_val(question)
+    # st.markdown(f"<div class='box box-instructions-val'><div class='section-header'>📚 Answers with Updated Prompt:</div>{instructions_text_val}</div>", unsafe_allow_html=True)
+    #
 
