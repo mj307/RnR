@@ -14,6 +14,7 @@ from trulens.apps.custom import TruCustomApp
 from trulens.core import TruSession
 from trulens.connectors.snowflake import SnowflakeConnector
 
+
 load_dotenv()
 
 st.set_page_config(page_title="Assignment Assistant", page_icon="❄️", layout="wide")
@@ -90,6 +91,28 @@ class RAG:
         context_str = self.retrieve_context(query)
         return self.generate_completion(query, context_str)
 
+    @instrument
+    def generate_completion_val(self, query: str, context_str: List[str]) -> str:
+        context = "\n".join(context_str)
+        prompt = f"""
+          You are an assignment assistant extracting information from the context provided.
+          Answer the question based on the context. Be as creative as you want and use poetry to answer.
+          If you don’t have the information, write a haiku. 
+          Context: {context}
+          Question:
+          {query}
+          Answer:
+        """
+        return complete("mistral-large2", prompt) #.get("result")
+
+    @instrument
+    def query_val(self, query: str) -> str:
+        """
+        Perform the retrieval and generation in a single query flow.
+        """
+        context_str = self.retrieve_context(query)
+        return self.generate_completion_val(query, context_str)
+
 
 snowpark_session = Session.builder.configs(connection_params).getOrCreate()
 
@@ -164,7 +187,7 @@ st.markdown("""
             background-color: #2596be;
             color: #FFDA03;
         }
-        .box-notes {
+        .box-instructions-val {
             background-color: #FFDA03;
             color: #2596be;
         }
@@ -185,10 +208,17 @@ question = st.text_input(':blue[Ask A2 a Question!]', 'I have public IP checked 
 tru_rag = TruCustomApp(
     rag,
     app_name="RAG",
-    app_version="simple",
+    app_version="production",
     feedbacks=[f_groundedness, f_answer_relevance, f_context_relevance]
 )
 
+rag_val = RAG()
+tru_rag_val = TruCustomApp(
+    rag_val,
+    app_name="RAG",
+    app_version="validation",
+    feedbacks=[f_groundedness, f_answer_relevance, f_context_relevance]
+)
 
 if st.button(":snowflake: Submit", type="primary"):
     #rag = RAG()
@@ -199,4 +229,8 @@ if st.button(":snowflake: Submit", type="primary"):
         instructions_text = rag.query(question)
     st.markdown(f"<div class='box box-instructions'><div class='section-header'>📚 Instructions:</div>{instructions_text}</div>", unsafe_allow_html=True)
 
+    st.write("The response below are generated with a different prompt, which encourages creativity, to test out Trulens.")
+    with tru_rag_val as recording:
+        instructions_text_val = rag_val.query_val(question)
+    st.markdown(f"<div class='box box-instructions-val'><div class='section-header'>📚 Instructions Val:</div>{instructions_text_val}</div>", unsafe_allow_html=True)
 
