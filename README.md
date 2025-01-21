@@ -4,7 +4,7 @@
 As a college student, one of the most challenging aspects of assignments is parsing and remembering the specifics and the nuances from a long assignment. Going to office hours may help, there’s often a long line, and students end up wasting a lot of time. Additionally, TA's and Professors have to spend a lot of their time explaining the same question to multiple students, wasting their time. This is frustrating for both students, TAs, and Professors.
 
 ## Introducing ... A2!
-Assignment Assisstant, or A2, is an AI-Powered assistant that allows TAs and professors to upload assignments, troubleshooting notes, and solutions to a shared platform. Students can then search through these past solutions and assignment specifics to quickly find answers to common clarification questions or setup issues, thus helping them make progress independently.
+Assignment Assistant, or A2, is an AI-Powered assistant that allows TAs and professors to upload assignments, troubleshooting notes, and solutions to a shared platform. Students can then search through these past solutions and assignment specifics to quickly find answers to common clarification questions or setup issues, thus helping them make progress independently.
 
 ## Design
 - Use Snowflake Stage to upload assignments in PDF format
